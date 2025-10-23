@@ -18,18 +18,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK (cmdline-tools + pachete)
         uses: android-actions/setup-android@v3
         with:
-          api-level: 34
-          build-tools: 34.0.0
-          components: |
+          accept-android-sdk-licenses: true
+          # opțional: alege versiunea cmdline-tools
+          cmdline-tools-version: 11076708
+          packages: |
             platforms;android-34
             build-tools;34.0.0
             platform-tools
 
-      # Instalează Gradle 8.7 via SDKMAN! (nu mai folosim acțiuni Gradle depreciate)
-      - name: Install Gradle 8.7 via SDKMAN
+      - name: Install Gradle 8.7 via SDKMAN (fără acțiuni depreciate)
         run: |
           curl -s "https://get.sdkman.io" | bash
           source "$HOME/.sdkman/bin/sdkman-init.sh"
