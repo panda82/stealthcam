@@ -18,24 +18,53 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK (cmdline-tools)
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
           cmdline-tools-version: 11076708
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
-            platform-tools
 
-      - name: Install Gradle 8.4 via SDKMAN
+      - name: Install SDK packages (prefer 34; fallback to latest)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sdkmanager --list || true
+
+          sdkmanager "platform-tools"
+
+          # Try platform 34, else pick latest
+          if ! sdkmanager "platforms;android-34"; then
+            LATEST_PLATFORM=$(sdkmanager --list | sed -n 's/^[[:space:]]*\(platforms;android-[0-9]\+\).*/\1/p' | sort -V | tail -1)
+            sdkmanager "${LATEST_PLATFORM}"
+            FALLBACK_API="${LATEST_PLATFORM##*android-}"
+          else
+            FALLBACK_API="34"
+          fi
+
+          # Try build-tools 34.0.0, else pick latest
+          if ! sdkmanager "build-tools;34.0.0"; then
+            LATEST_BT=$(sdkmanager --list | sed -n 's/^[[:space:]]*\(build-tools;[0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)
+            sdkmanager "${LATEST_BT}"
+          fi
+
+          echo "USING_API=${FALLBACK_API}" >> $GITHUB_ENV
+
+      - name: Align compile/target SDK to installed platform (only if not 34)
+        if: env.USING_API != '34'
+        run: |
+          API=${USING_API}
+          echo "Adjusting compile/target SDK to ${API}"
+          sed -i "s/compileSdkVersion [0-9][0-9]*/compileSdkVersion ${API}/" app/build.gradle
+          sed -i "s/targetSdkVersion [0-9][0-9]*/targetSdkVersion ${API}/" app/build.gradle
+
+      - name: Install Gradle 8.4 via SDKMAN (compatible cu AGP 8.2.2)
         run: |
           curl -s "https://get.sdkman.io" | bash
           source "$HOME/.sdkman/bin/sdkman-init.sh"
           sdk install gradle 8.4
           gradle --version
 
-      - name: Build Debug APK
+      - name: Build debug APK
         run: gradle assembleDebug
 
       - name: Upload APK artifact
