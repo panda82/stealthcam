@@ -41,23 +41,34 @@ jobs:
           echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Build Debug APK (with full diagnostics)
+      - name: Project diagnostics (module & tasks)
         shell: bash
         run: |
           set -euxo pipefail
           gradle -q projects || true
-          gradle :app:dependencies --configuration debugRuntimeClasspath > deps.txt || true
+          echo "---- :app tasks (first 100 lines) ----"
+          gradle :app:tasks --all | head -n 100 || true
+          echo "---- dependency insight (coroutines & livedata) ----"
+          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency kotlinx-coroutines-core || true
+          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency lifecycle-livedata || true
+
+      - name: Build Debug APK (capture full logs)
+        shell: bash
+        run: |
+          set -euxo pipefail
           ( gradle :app:checkDebugAarMetadata --stacktrace --console=plain --info || true ) | tee build.log
-          ( gradle :app:assembleDebug --stacktrace --console=plain --info || true ) | tee -a build.log
+          ( gradle :app:assembleDebug         --stacktrace --console=plain --info || true ) | tee -a build.log
 
       - name: List outputs (debug)
         if: always()
         shell: bash
         run: |
           set -euxo pipefail
-          echo "=== SEARCHING FOR APK/AAB FILES ==="
-          find . -maxdepth 6 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
-          echo "===================================="
+          echo "=== REPO TREE (top) ==="; ls -la
+          echo "=== SEARCH APK/AAB (deep) ==="
+          find . -maxdepth 8 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
+          echo "=== LIST app/build ==="
+          [ -d app/build ] && find app/build -maxdepth 6 -type f -print | sed 's/^/BUILDFILE: /' || echo "No app/build directory."
 
       - name: Upload any APK/AAB (always)
         if: always()
@@ -69,6 +80,14 @@ jobs:
             **/outputs/bundle/**/*.aab
           if-no-files-found: warn
 
+      - name: Upload build folder (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-build-folder
+          path: app/build/**
+          if-no-files-found: warn
+
       - name: Upload diagnostics (always)
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,4 +95,3 @@ jobs:
           name: gradle-diag
           path: |
             build.log
-            deps.txt
