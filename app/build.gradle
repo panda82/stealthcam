@@ -6,7 +6,6 @@ plugins {
 android {
   namespace "com.marius.stealthcam"
   compileSdkVersion 35
-
   defaultConfig {
     applicationId "com.marius.stealthcam"
     minSdkVersion 26
@@ -14,21 +13,17 @@ android {
     versionCode 2
     versionName "1.1-dcim"
   }
-
   buildTypes {
     release {
       minifyEnabled false
       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
     }
   }
-
-  compileOptions {
-    sourceCompatibility JavaVersion.VERSION_17
-    targetCompatibility JavaVersion.VERSION_17
-  }
+  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
   kotlinOptions { jvmTarget = '17' }
 }
 
+/* Evită mismatch: blochează versiunile sensibile */
 configurations.all {
   resolutionStrategy {
     force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
@@ -40,11 +35,25 @@ configurations.all {
 }
 
 dependencies {
-  implementation 'androidx.appcompat:appcompat:1.7.0'
-  implementation 'androidx.core:core-ktx:1.13.1'
-  implementation 'androidx.activity:activity-ktx:1.9.2'
-  implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.6'
+  // AndroidX coerent; EXCLUDERI pentru livedata-ktx care provoacă conflicte
+  implementation('androidx.appcompat:appcompat:1.7.0') {
+    exclude group: 'androidx.lifecycle', module: 'lifecycle-livedata-ktx'
+    exclude group: 'androidx.lifecycle', module: 'lifecycle-livedata-core-ktx'
+  }
+  implementation('androidx.core:core-ktx:1.13.1') {
+    exclude group: 'androidx.lifecycle', module: 'lifecycle-livedata-ktx'
+    exclude group: 'androidx.lifecycle', module: 'lifecycle-livedata-core-ktx'
+  }
+  implementation('androidx.activity:activity-ktx:1.9.2') {
+    exclude group: 'androidx.lifecycle', module: 'lifecycle-livedata-ktx'
+    exclude group: 'androidx.lifecycle', module: 'lifecycle-livedata-core-ktx'
+  }
+  implementation('androidx.lifecycle:lifecycle-runtime-ktx:2.8.6') {
+    exclude group: 'androidx.lifecycle', module: 'lifecycle-livedata-ktx'
+    exclude group: 'androidx.lifecycle', module: 'lifecycle-livedata-core-ktx'
+  }
 
+  // Kotlin aliniat + coroutines pin
   implementation platform('org.jetbrains.kotlin:kotlin-bom:1.9.22')
   implementation 'org.jetbrains.kotlin:kotlin-stdlib'
   implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
