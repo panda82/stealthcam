@@ -1,5 +1,4 @@
 name: Android CI
-
 on:
   push:
     branches: ["main"]
@@ -10,15 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
+        with: { distribution: temurin, java-version: "17" }
       - uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
+        with: { accept-android-sdk-licenses: true }
 
       - name: Install SDK packages (prefer 34, fallback 35)
         shell: bash
@@ -28,7 +22,7 @@ jobs:
           sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
           sdkmanager "build-tools;34.0.0"  || sdkmanager "build-tools;35.0.0"  || true
 
-      - name: Install Gradle 8.4 (official zip)
+      - name: Use Gradle from runner (8.4)
         shell: bash
         run: |
           set -euxo pipefail
