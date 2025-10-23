@@ -32,6 +32,15 @@ jobs:
           sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
           sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
 
+      - name: Install Gradle manually
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L "https://services.gradle.org/distributions/gradle-8.5-bin.zip" -o gradle.zip
+          unzip -q gradle.zip -d "$HOME/gradle"
+          echo "$HOME/gradle/gradle-8.5/bin" >> "$GITHUB_PATH"
+          gradle --version
+
       - name: Build Debug APK (with full diagnostics)
         shell: bash
         run: |
@@ -66,6 +75,9 @@ jobs:
         with:
           name: gradle-diag
           path: |
+            build.log
+            deps.txt
+          if-no-files-found: warn          path: |
             build.log
             deps.txt
           if-no-files-found: warn            deps.txt          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
