@@ -38,7 +38,6 @@ jobs:
           ROOT="$(git ls-files | grep -E '(^|/)(settings\.gradle(\.kts)?|build\.gradle(\.kts)?)$' | xargs -r -n1 dirname | sort -u | head -n1)"
           [ -n "$ROOT" ] || { echo "No Gradle settings/build file found"; exit 1; }
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
-          echo "Gradle root: $ROOT"
 
       - name: Install Gradle 8.4 (official zip)
         shell: bash
@@ -64,20 +63,19 @@ jobs:
           echo "moduleDir=$MOD_REL" >> "$GITHUB_OUTPUT"
           echo "modulePath=:$MOD_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Show Gradle projects & tasks (debug)
-        shell: bash
-        run: |
-          set -euxo pipefail
-          cd "${{ steps.detect.outputs.root }}"
-          gradle -q projects || true
-          gradle tasks --all | head -n 120 || true
-
       - name: Build Debug APK
         shell: bash
         run: |
           set -euxo pipefail
           cd "${{ steps.detect.outputs.root }}"
-          gradle "${{ steps.module.outputs.modulePath }}:assembleDebug" --stacktrace --warning-mode all --info
+          gradle "${{ steps.module.outputs.modulePath }}:assembleDebug" --stacktrace --warning-mode all --info | tee build.log
+
+      - name: Upload build log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: ${{ steps.detect.outputs.root }}/build.log
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
