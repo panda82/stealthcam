@@ -49,7 +49,10 @@ jobs:
           ROOT="$(git ls-files | grep -E '(^|/)(settings\.gradle(\.kts)?|build\.gradle(\.kts)?)$' | xargs -r -n1 dirname | sort -u | head -n1)"
           [ -n "$ROOT" ] || { echo "No Gradle settings/build file found"; exit 1; }
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+<<<<<<< HEAD
           echo "Gradle root: $ROOT"
+=======
+>>>>>>> 2271b0a (CI: fix YAML (no merged lines), robust SDK + auto-detect Gradle root)
 
       - name: Align compile/target SDK if fallback used
         if: env.USING_API != '34'
@@ -68,6 +71,7 @@ jobs:
           sdk install gradle 8.4
           gradle --version
 
+<<<<<<< HEAD
       - name: Build Debug APK
         shell: bash
         run: |
@@ -149,8 +153,17 @@ git push          curl -s "https://get.sdkman.io" | bash
         run: gradle assembleDebug
 
       # Upload artifact (APK)
+=======
+      - name: Build Debug APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd "${{ steps.detect.outputs.root }}"
+          gradle assembleDebug --stacktrace --warning-mode all --info
+
+>>>>>>> 2271b0a (CI: fix YAML (no merged lines), robust SDK + auto-detect Gradle root)
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.detect.outputs.root }}/app/build/outputs/apk/debug/*.apk
