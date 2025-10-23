@@ -39,7 +39,6 @@ jobs:
           [ -n "$ROOT" ] || { echo "No Gradle settings/build file found"; exit 1; }
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
           echo "Gradle root: $ROOT"
-          echo "---- tree (root) ----"; ls -la "$ROOT"
 
       - name: Install Gradle 8.4 (official zip)
         shell: bash
@@ -57,20 +56,15 @@ jobs:
         run: |
           set -e
           ROOT="${{ steps.detect.outputs.root }}"
-          # caută fișier care conține pluginul de aplicație
           HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts "com.android.application" "$ROOT" || true)"
-          if [ -z "$HIT" ]; then
-            echo "Nu am găsit niciun modul cu 'com.android.application' sub $ROOT"; exit 1
-          fi
+          [ -n "$HIT" ] || { echo "No module with 'com.android.application' found under $ROOT"; exit 1; }
           MOD_DIR="$(dirname "$HIT")"
-          # scoate prefixul root/
           MOD_REL="${MOD_DIR#$ROOT/}"
-          MOD_NAME="${MOD_REL//\//:}"  # înlocuiește / cu :
-          echo "Found app module at: $MOD_REL  (Gradle path :$MOD_NAME)"
+          MOD_NAME="${MOD_REL//\//:}"
           echo "moduleDir=$MOD_REL" >> "$GITHUB_OUTPUT"
           echo "modulePath=:$MOD_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Show Gradle projects & tasks
+      - name: Show Gradle projects & tasks (debug)
         shell: bash
         run: |
           set -euxo pipefail
@@ -89,11 +83,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: StealthCam-debug
-          path: ${{ steps.detect.outputs.root }}/${{ steps.module.outputs.moduleDir }}/build/outputs/apk/debug/*.apk          cd "${{ steps.detect.outputs.root }}"
-          gradle assembleDebug --stacktrace --warning-mode all --info
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: ${{ steps.detect.outputs.root }}/app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.detect.outputs.root }}/${{ steps.module.outputs.moduleDir }}/build/outputs/apk/debug/*.apk
