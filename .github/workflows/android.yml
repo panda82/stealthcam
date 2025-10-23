@@ -8,19 +8,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
 
@@ -48,16 +44,11 @@ jobs:
         run: |
           set -e
           HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts 'com.android.application' . | head -n1 || true)"
-          if [ -z "$HIT" ]; then
-            echo "Nu am găsit niciun modul cu 'com.android.application' în repo." >&2
-            exit 1
-          fi
-          MOD_DIR="$(dirname "$HIT")"
-          MOD_REL="${MOD_DIR#./}"
-          MOD_NAME="${MOD_REL//\//:}"
+          [ -n "$HIT" ] || { echo "No module with 'com.android.application' found."; exit 1; }
+          MOD_DIR="$(dirname "$HIT")"; MOD_REL="${MOD_DIR#./}"; MOD_NAME="${MOD_REL//\//:}"
           echo "module_dir=$MOD_REL"    >> "$GITHUB_OUTPUT"
           echo "module_path=:$MOD_NAME" >> "$GITHUB_OUTPUT"
-          echo "Found module dir: $MOD_REL  | Gradle path: :$MOD_NAME"
+          echo "Module: $MOD_REL | Gradle path ::$MOD_NAME"
 
       - name: Build Debug APK (capture logs)
         shell: bash
