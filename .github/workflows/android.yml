@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,55 +24,67 @@ jobs:
         with:
           accept-android-sdk-licenses: true
 
-      - name: Install SDK packages (prefer 34)
+      - name: Install SDK packages (prefer 34, fallback 35)
         shell: bash
         run: |
           set -euxo pipefail
           sdkmanager "platform-tools" || true
-          sdkmanager "platforms;android-34" || true
-          sdkmanager "build-tools;34.0.0" || true
+          sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
+          sdkmanager "build-tools;34.0.0"  || sdkmanager "build-tools;35.0.0"  || true
 
       - name: Install Gradle 8.4 (official zip)
         shell: bash
         run: |
           set -euxo pipefail
-          GRADLE_VER=8.4
-          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
+          v=8.4
+          curl -L "https://services.gradle.org/distributions/gradle-${v}-bin.zip" -o gradle.zip
           unzip -q gradle.zip -d "$HOME/gradle"
-          echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
+          echo "$HOME/gradle/gradle-${v}/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Project diagnostics (module & tasks)
+      - name: Detect Android application module
+        id: detect
         shell: bash
         run: |
-          set -euxo pipefail
-          echo "---- projects ----"
-          gradle -q projects || true
-          echo "---- :app tasks (first 120 lines) ----"
-          gradle :app:tasks --all | head -n 120 || true
-          echo "---- grep com.android.application ----"
-          grep -RIn --include=build.gradle --include=build.gradle.kts "com.android.application" . || true
+          set -e
+          HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts 'com.android.application' . | head -n1 || true)"
+          if [ -z "$HIT" ]; then
+            echo "Nu am găsit niciun modul cu 'com.android.application' în repo." >&2
+            exit 1
+          fi
+          MOD_DIR="$(dirname "$HIT")"
+          MOD_REL="${MOD_DIR#./}"
+          MOD_NAME="${MOD_REL//\//:}"
+          echo "module_dir=$MOD_REL"    >> "$GITHUB_OUTPUT"
+          echo "module_path=:$MOD_NAME" >> "$GITHUB_OUTPUT"
+          echo "Found module dir: $MOD_REL  | Gradle path: :$MOD_NAME"
 
-      - name: Build (capture full logs, do not fail job)
+      - name: Build Debug APK (capture logs)
         shell: bash
         run: |
           set -euxo pipefail
-          # rulează întâi verificarea care pica, apoi buildul; nu oprim jobul ca să încărcăm logurile
-          ( gradle :app:checkDebugAarMetadata --stacktrace --console=plain --info || true ) | tee build.log
-          ( gradle :app:assembleDebug         --stacktrace --console=plain --info || true ) | tee -a build.log
-          echo "---- tail build.log ----"
-          tail -n 120 build.log || true
+          ( gradle "${{ steps.detect.outputs.module_path }}:checkDebugAarMetadata" --stacktrace --console=plain --info || true ) | tee build.log
+          ( gradle "${{ steps.detect.outputs.module_path }}:assembleDebug"         --stacktrace --console=plain --info || true ) | tee -a build.log
 
       - name: List outputs (debug)
         if: always()
         shell: bash
         run: |
           set -euxo pipefail
-          echo "=== REPO ROOT ==="; ls -la
           echo "=== SEARCH APK/AAB ==="
-          find . -maxdepth 8 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
-          echo "=== LIST app/ ==="
-          find app -maxdepth 6 -type f -print 2>/dev/null | sed 's/^/APPFILE: /' || echo "No app/ directory or files."
+          find . -maxdepth 9 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
+          echo "=== MODULE BUILD DIR ==="
+          [ -d "${{ steps.detect.outputs.module_dir }}/build" ] && find "${{ steps.detect.outputs.module_dir }}/build" -maxdepth 6 -type f -print | sed 's/^/BUILDFILE: /' || echo "No module build dir."
+
+      - name: Upload APK/AAB (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            ${{ steps.detect.outputs.module_dir }}/build/outputs/apk/**/*.apk
+            ${{ steps.detect.outputs.module_dir }}/build/outputs/bundle/**/*.aab
+          if-no-files-found: warn
 
       - name: Upload build log (always)
         if: always()
@@ -79,21 +92,3 @@ jobs:
         with:
           name: gradle-build-log
           path: build.log
-
-      - name: Upload app folder (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-folder
-          path: app/**
-          if-no-files-found: warn
-
-      - name: Upload any APK/AAB (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: |
-            **/outputs/apk/**/*.apk
-            **/outputs/bundle/**/*.aab
-          if-no-files-found: warn
