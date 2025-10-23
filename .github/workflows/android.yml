@@ -10,28 +10,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Verifică și descarcă fișierele din repo
       - uses: actions/checkout@v4
 
-      # 2️⃣ Setează Java Development Kit (JDK 17)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # 3️⃣ Instalează Android SDK (Platform 34, Build-Tools 34.0.0, Platform-Tools)
-      - name: Set up Android SDK
+      # Instalează Android cmdline-tools (fără 'packages' ca să evităm concatenarea)
+      - name: Set up Android SDK (cmdline-tools only)
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
           cmdline-tools-version: 11076708
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
-            platform-tools
 
-      # 4️⃣ Instalează Gradle 8.4 (compatibil cu Android Gradle Plugin 8.2.2)
+      # Instalează pachetele, cu fallback dacă 34 nu e disponibil pe runner
+      - name: Install SDK packages (with fallback)
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          sdkmanager --list || true
+
+          # platform-tools
+          sdkmanager "platform-tools" || true
+
+          # Platform 34 sau cel mai nou disponibil
+          if ! sdkmanager "platforms;android-34"; then
+            LATEST_PLATFORM="$(sdkmanager --list | sed -n 's/^[[:space:]]*\(platforms;android-[0-9]\+\).*/\1/p' | sort -V | tail -1)"
+            sdkmanager "${LATEST_PLATFORM}"
+            USING_API="${LATEST_PLATFORM##*android-}"
+          else
+            USING_API="34"
+          fi
+          echo "USING_API=${USING_API}" >> "$GITHUB_ENV"
+
+          # Build-tools 34.0.0 sau cele mai noi disponibile
+          if ! sdkmanager "build-tools;34.0.0"; then
+            LATEST_BT="$(sdkmanager --list | sed -n 's/^[[:space:]]*\(build-tools;[0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)"
+            sdkmanager "${LATEST_BT}"
+          fi
+
+      # Dacă API-ul nu e 34, aliniază compile/target în gradle ca să potrivească
+      - name: Align compile/target SDK if fallback used
+        if: env.USING_API != '34'
+        shell: bash
+        run: |
+          echo "Adjusting compile/target SDK to ${USING_API}"
+          sed -i "s/compileSdkVersion [0-9][0-9]*/compileSdkVersion ${USING_API}/" app/build.gradle
+          sed -i "s/targetSdkVersion [0-9][0-9]*/targetSdkVersion ${USING_API}/" app/build.gradle
+
+      # Instalează Gradle 8.4 (compatibil cu AGP 8.2.2 din proiectul tău)
       - name: Install Gradle 8.4 via SDKMAN
         shell: bash
         run: |
@@ -40,11 +70,11 @@ jobs:
           sdk install gradle 8.4
           gradle --version
 
-      # 5️⃣ Construiește APK-ul de debug
+      # Build APK debug
       - name: Build Debug APK
         run: gradle assembleDebug
 
-      # 6️⃣ Încarcă APK-ul rezultat ca artifact descărcabil
+      # Upload artifact (APK)
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
