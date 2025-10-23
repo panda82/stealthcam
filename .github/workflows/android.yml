@@ -8,13 +8,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
+      # 1️⃣ Verifică și descarcă fișierele din repo
       - uses: actions/checkout@v4
+
+      # 2️⃣ Setează Java Development Kit (JDK 17)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
+      # 3️⃣ Instalează Android SDK (Platform 34, Build-Tools 34.0.0, Platform-Tools)
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -24,6 +30,8 @@ jobs:
             platforms;android-34
             build-tools;34.0.0
             platform-tools
+
+      # 4️⃣ Instalează Gradle 8.4 (compatibil cu Android Gradle Plugin 8.2.2)
       - name: Install Gradle 8.4 via SDKMAN
         shell: bash
         run: |
@@ -31,8 +39,12 @@ jobs:
           source "$HOME/.sdkman/bin/sdkman-init.sh"
           sdk install gradle 8.4
           gradle --version
+
+      # 5️⃣ Construiește APK-ul de debug
       - name: Build Debug APK
         run: gradle assembleDebug
+
+      # 6️⃣ Încarcă APK-ul rezultat ca artifact descărcabil
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
