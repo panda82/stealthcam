@@ -10,17 +10,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: "17" }
+        with:
+          distribution: temurin
+          java-version: "17"
       - uses: android-actions/setup-android@v3
-        with: { accept-android-sdk-licenses: true }
-      - name: Install SDK (API 34)
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Install SDK packages (API 34)
         shell: bash
         run: |
           set -euxo pipefail
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-34"
           sdkmanager "build-tools;34.0.0"
-      - name: Install Gradle 8.4
+
+      - name: Install Gradle 8.4 (runner-local)
         shell: bash
         run: |
           set -euxo pipefail
@@ -29,6 +34,7 @@ jobs:
           unzip -q gradle.zip -d "$HOME/gradle"
           echo "$HOME/gradle/gradle-${v}/bin" >> "$GITHUB_PATH"
           gradle --version
+
       - name: Detect Android app module
         id: detect
         shell: bash
@@ -40,24 +46,36 @@ jobs:
           echo "module_dir=$MOD_REL"    >> "$GITHUB_OUTPUT"
           echo "module_path=:$MOD_NAME" >> "$GITHUB_OUTPUT"
           echo "Module: $MOD_REL | Gradle path ::$MOD_NAME"
+
       - name: Build Debug APK (strict + logs)
         shell: bash
         run: |
           set -euxo pipefail
           export GRADLE_OPTS="-Dorg.gradle.console=plain"
           ( gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --stacktrace --info --no-daemon || true ) | tee build.log
-          echo "=== SEARCH APK ==="
-          find "${{ steps.detect.outputs.module_dir }}/build" -type f -name '*.apk' -print | sed 's/^/FOUND: /' || true
+
+          echo "=== SEARCH APK (repo-wide) ==="
+          find . -maxdepth 10 -type f -name '*.apk' -print | sed 's/^/FOUND: /' || true
+
+          echo "=== MODULE BUILD DIR ==="
+          if [ -d "${{ steps.detect.outputs.module_dir }}/build" ]; then
+            find "${{ steps.detect.outputs.module_dir }}/build" -maxdepth 8 -type f -print | sed 's/^/BUILDFILE: /' || true
+          else
+            echo "No module build dir."
+          fi
+
           if ! find "${{ steps.detect.outputs.module_dir }}/build/outputs/apk" -type f -name '*.apk' | grep -q . ; then
             echo "No APK found under ${{ steps.detect.outputs.module_dir }}/build/outputs/apk"
             tail -n 200 build.log || true
+            exit 1
           fi
-      - name: Upload APK/logs (always)
+
+      - name: Upload APK + log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
-            ${{ steps.detect.outputs.module_dir }}/build/outputs/apk/**/*.apk
+            **/*.apk
             build.log
           if-no-files-found: warn
