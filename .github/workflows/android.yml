@@ -16,7 +16,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK (cmdline-tools)
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
@@ -27,17 +27,8 @@ jobs:
         run: |
           set -euxo pipefail
           sdkmanager "platform-tools" || true
-          sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
-          sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
-
-      - name: Detect Gradle project root
-        id: detect
-        shell: bash
-        run: |
-          set -e
-          ROOT="$(git ls-files | grep -E '(^|/)(settings\.gradle(\.kts)?|build\.gradle(\.kts)?)$' | xargs -r -n1 dirname | sort -u | head -n1)"
-          [ -n "$ROOT" ] || { echo "No Gradle settings/build file found"; exit 1; }
-          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          sdkmanager "platforms;android-35" || sdkmanager "platforms;android-34" || true
+          sdkmanager "build-tools;35.0.0" || sdkmanager "build-tools;34.0.0" || true
 
       - name: Install Gradle 8.4 (official zip)
         shell: bash
@@ -49,36 +40,21 @@ jobs:
           echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Detect Android application module
-        id: module
-        shell: bash
-        run: |
-          set -e
-          ROOT="${{ steps.detect.outputs.root }}"
-          HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts "com.android.application" "$ROOT" || true)"
-          [ -n "$HIT" ] || { echo "No module with 'com.android.application' found under $ROOT"; exit 1; }
-          MOD_DIR="$(dirname "$HIT")"
-          MOD_REL="${MOD_DIR#$ROOT/}"
-          MOD_NAME="${MOD_REL//\//:}"
-          echo "moduleDir=$MOD_REL" >> "$GITHUB_OUTPUT"
-          echo "modulePath=:$MOD_NAME" >> "$GITHUB_OUTPUT"
-
       - name: Build Debug APK
         shell: bash
         run: |
           set -euxo pipefail
-          cd "${{ steps.detect.outputs.root }}"
-          gradle "${{ steps.module.outputs.modulePath }}:assembleDebug" --stacktrace --warning-mode all --info | tee build.log
+          gradle :app:assembleDebug --stacktrace --warning-mode all --info | tee build.log
 
       - name: Upload build log (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gradle-build-log
-          path: ${{ steps.detect.outputs.root }}/build.log
+          path: build.log
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: StealthCam-debug
-          path: ${{ steps.detect.outputs.root }}/${{ steps.module.outputs.moduleDir }}/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
