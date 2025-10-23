@@ -7,17 +7,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ORG_GRADLE_CONFIGURATION_CACHE: "false"
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
 
-      - name: Install SDK packages (API 34)
+      - name: Install SDK (API 34)
         shell: bash
         run: |
           set -euxo pipefail
@@ -25,7 +29,7 @@ jobs:
           sdkmanager "platforms;android-34"
           sdkmanager "build-tools;34.0.0"
 
-      - name: Install Gradle 8.4 (runner-local)
+      - name: Install Gradle 8.4
         shell: bash
         run: |
           set -euxo pipefail
@@ -35,38 +39,53 @@ jobs:
           echo "$HOME/gradle/gradle-${v}/bin" >> "$GITHUB_PATH"
           gradle --version
 
+      - name: Show app/build.gradle (with line numbers)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "----- app/build.gradle -----" | tee -a $GITHUB_STEP_SUMMARY
+          nl -ba app/build.gradle | sed -n '1,200p' | tee -a $GITHUB_STEP_SUMMARY
+
       - name: Detect Android app module
         id: detect
         shell: bash
         run: |
           set -e
-          HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts 'com.android.application' . | head -n1 || true)"
-          [ -n "$HIT" ] || { echo "No module with 'com.android.application' found."; exit 1; }
-          MOD_DIR="$(dirname "$HIT")"; MOD_REL="${MOD_DIR#./}"; MOD_NAME="${MOD_REL//\//:}"
-          echo "module_dir=$MOD_REL"    >> "$GITHUB_OUTPUT"
-          echo "module_path=:$MOD_NAME" >> "$GITHUB_OUTPUT"
-          echo "Module: $MOD_REL | Gradle path ::$MOD_NAME"
+          HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts 'com.android.application' . || true)"
+          if [ -z "$HIT" ]; then
+            # Pentru Java-only nu apare pluginul de aplicație în grep, folosim fallback către :app
+            if [ -d app ]; then
+              echo "module_dir=app" >> "$GITHUB_OUTPUT"
+              echo "module_path=:app" >> "$GITHUB_OUTPUT"
+              echo "Module (fallback): app | Gradle path ::app"
+            else
+              echo "No module found"; exit 1
+            fi
+          else
+            MOD_DIR="$(dirname "$HIT")"; MOD_REL="${MOD_DIR#./}"; MOD_NAME="${MOD_REL//\//:}"
+            echo "module_dir=$MOD_REL"    >> "$GITHUB_OUTPUT"
+            echo "module_path=:$MOD_NAME" >> "$GITHUB_OUTPUT"
+            echo "Module: $MOD_REL | Gradle path ::$MOD_NAME"
+          fi
 
-      - name: Build Debug APK (strict + logs)
+      - name: Build Debug APK (no config cache, full logs)
         shell: bash
         run: |
           set -euxo pipefail
-          export GRADLE_OPTS="-Dorg.gradle.console=plain"
-          ( gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --stacktrace --info --no-daemon || true ) | tee build.log
+          export GRADLE_OPTS="-Dorg.gradle.console=plain -Dorg.gradle.warning.mode=all"
+          ( gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --no-configuration-cache --stacktrace --info --no-daemon || true ) | tee build.log
 
-          echo "=== SEARCH APK (repo-wide) ==="
-          find . -maxdepth 10 -type f -name '*.apk' -print | sed 's/^/FOUND: /' || true
+          echo "===== LAST 300 LINES =====" | tee -a $GITHUB_STEP_SUMMARY
+          tail -n 300 build.log | tee -a $GITHUB_STEP_SUMMARY || true
 
-          echo "=== MODULE BUILD DIR ==="
-          if [ -d "${{ steps.detect.outputs.module_dir }}/build" ]; then
-            find "${{ steps.detect.outputs.module_dir }}/build" -maxdepth 8 -type f -print | sed 's/^/BUILDFILE: /' || true
-          else
-            echo "No module build dir."
-          fi
+          echo "===== WHAT WENT WRONG =====" | tee -a $GITHUB_STEP_SUMMARY
+          awk 'p;/^\* What went wrong:/{p=1} /^\* Try:/{exit}' build.log | tee -a $GITHUB_STEP_SUMMARY || true
+
+          echo "===== SEARCH APK =====" | tee -a $GITHUB_STEP_SUMMARY
+          find . -maxdepth 10 -type f -name '*.apk' -print | sed 's/^/FOUND: /' | tee -a $GITHUB_STEP_SUMMARY || true
 
           if ! find "${{ steps.detect.outputs.module_dir }}/build/outputs/apk" -type f -name '*.apk' | grep -q . ; then
-            echo "No APK found under ${{ steps.detect.outputs.module_dir }}/build/outputs/apk"
-            tail -n 200 build.log || true
+            echo "No APK under ${{ steps.detect.outputs.module_dir }}/build/outputs/apk" | tee -a $GITHUB_STEP_SUMMARY
             exit 1
           fi
 
