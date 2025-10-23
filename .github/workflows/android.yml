@@ -49,29 +49,31 @@ jobs:
           echo "module_path=:$MOD_NAME" >> "$GITHUB_OUTPUT"
           echo "Module: $MOD_REL | Gradle path ::$MOD_NAME"
 
-      - name: Build Debug APK (strict + logs)
+      - name: Build (print error to console + capture log)
         shell: bash
         run: |
           set -euxo pipefail
-          export GRADLE_OPTS="-Dorg.gradle.console=plain"
-          gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --stacktrace --info --no-daemon | tee build.log
+          export GRADLE_OPTS="-Dorg.gradle.console=plain -Dorg.gradle.warning.mode=all"
+          # Build + log în fișier
+          ( gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --stacktrace --info --no-daemon || true ) | tee build.log
 
-          echo "=== SEARCH APK/AAB (whole repo) ==="
+          echo "===== LAST 400 LINES (build.log) ====="
+          tail -n 400 build.log || true
+
+          echo "===== WHAT WENT WRONG (if present) ====="
+          awk 'p;/^\* What went wrong:/{p=1} /^\* Try:/{exit}' build.log || true
+
+          echo "===== COMMON FAILURES (grep) ====="
+          grep -nE "FAILED|^FAILURE:|A failure occurred while executing|Exception:|error:" build.log || true
+
+          echo "===== SEARCH APK/AAB (whole repo) ====="
           find . -maxdepth 10 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
 
-          echo "=== SEARCH inside module build dir ==="
+          echo "===== MODULE BUILD DIR LIST ====="
           if [ -d "${{ steps.detect.outputs.module_dir }}/build" ]; then
             find "${{ steps.detect.outputs.module_dir }}/build" -maxdepth 8 -type f -print | sed 's/^/BUILDFILE: /' || true
           else
             echo "No module build dir."
-          fi
-
-          # Fail explicit dacă nu există niciun APK în outputs
-          if ! find "${{ steps.detect.outputs.module_dir }}/build/outputs/apk" -type f -name '*.apk' | grep -q . ; then
-            echo "No APK found under ${{ steps.detect.outputs.module_dir }}/build/outputs/apk"
-            echo "------ tail build.log ------"
-            tail -n 200 build.log || true
-            # NU mai dăm exit 1 aici, ca să putem încărca artefactele de diagnostic
           fi
 
       - name: Upload ANY APK/AAB (repo-wide)
