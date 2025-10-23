@@ -1,94 +1,54 @@
 name: Android CI
 on:
-  push:
-    branches: ["main"]
+  push: { branches: ["main"] }
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ORG_GRADLE_CONFIGURATION_CACHE: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
       - uses: android-actions/setup-android@v3
         with: { accept-android-sdk-licenses: true }
-
-      - name: Install SDK (API 34)
-        shell: bash
+      - name: Install SDK 34
         run: |
           set -euxo pipefail
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-34"
-          sdkmanager "build-tools;34.0.0"
-
-      - name: Install Gradle 8.4
-        shell: bash
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+      - name: Gradle 8.4
         run: |
           set -euxo pipefail
           v=8.4
           curl -L "https://services.gradle.org/distributions/gradle-${v}-bin.zip" -o gradle.zip
           unzip -q gradle.zip -d "$HOME/gradle"
           echo "$HOME/gradle/gradle-${v}/bin" >> "$GITHUB_PATH"
-          gradle --version
-
-      - name: Detect Android app module
-        id: detect
-        shell: bash
-        run: |
-          set -e
-          if [ -d app ]; then
-            echo "module_dir=app" >> "$GITHUB_OUTPUT"
-            echo "module_path=:app" >> "$GITHUB_OUTPUT"
-            echo "Module: app | Gradle path ::app"
-          else
-            HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts 'com.android.application' . | head -n1 || true)"
-            [ -n "$HIT" ] || { echo "No module with 'com.android.application' found."; exit 1; }
-            MOD_DIR="$(dirname "$HIT")"; MOD_REL="${MOD_DIR#./}"; MOD_NAME="${MOD_REL//\//:}"
-            echo "module_dir=$MOD_REL"    >> "$GITHUB_OUTPUT"
-            echo "module_path=:$MOD_NAME" >> "$GITHUB_OUTPUT"
-            echo "Module: $MOD_REL | Gradle path ::$MOD_NAME"
-          fi
-
-      - name: Build & Package Debug (STRICT — fail on error)
-        shell: bash
+      - name: Assemble Debug (strict)
         run: |
           set -euxo pipefail
-          export GRADLE_OPTS="-Dorg.gradle.console=plain -Dorg.gradle.warning.mode=all"
-          # curățăm și afișăm proprietăți utile
-          gradle "${{ steps.detect.outputs.module_path }}:clean" --no-daemon
-          gradle "${{ steps.detect.outputs.module_path }}:properties" --no-daemon | tee gradle.properties.out || true
+          gradle :app:clean --no-daemon
+          # rulăm cu debug + stacktrace, salvăm log-ul complet
+          ( gradle :app:assembleDebug --no-daemon --stacktrace --debug || true ) | tee build.log
 
-          # rulează build-ul, DAR fără "|| true" -> dacă dă eroare, jobul PICA și vedem cauza
-          gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --no-daemon --stacktrace --info --warning-mode all | tee build.log
-
-          # listări după build
-          echo "===== SEARCH *.apk (repo) ====="        >> $GITHUB_STEP_SUMMARY
-          find . -maxdepth 10 -type f -name '*.apk' -print | sed 's/^/FOUND: /' >> $GITHUB_STEP_SUMMARY || true
-
-          echo "===== TREE app/build (top 400) ====="    >> $GITHUB_STEP_SUMMARY
-          if [ -d "${{ steps.detect.outputs.module_dir }}/build" ]; then
-            find "${{ steps.detect.outputs.module_dir }}/build" -maxdepth 7 -type f | sort | head -n 400 >> $GITHUB_STEP_SUMMARY
-          else
-            echo "No module build dir." >> $GITHUB_STEP_SUMMARY
+          # numerotăm liniile din log și extragem fereastra în jurul FAIL-ului
+          nl -ba build.log > build.n.log
+          FAIL_LINE=$(grep -n "^FAILURE: Build failed" build.n.log | head -n1 | cut -d: -f1 || true)
+          if [ -n "$FAIL_LINE" ]; then
+            START=$(( FAIL_LINE>200 ? FAIL_LINE-200 : 1 ))
+            END=$(( FAIL_LINE+60 ))
+            echo "===== ERROR CONTEXT ($START..$END) =====" >> $GITHUB_STEP_SUMMARY
+            sed -n "${START},${END}p" build.n.log >> $GITHUB_STEP_SUMMARY
           fi
 
-          echo "===== TAIL(build.log, 300) ====="        >> $GITHUB_STEP_SUMMARY
-          tail -n 300 build.log >> $GITHUB_STEP_SUMMARY || true
-
-          echo "===== WHAT WENT WRONG ====="             >> $GITHUB_STEP_SUMMARY
-          awk 'p;/^\* What went wrong:/{p=1} /^\* Try:/{exit}' build.log >> $GITHUB_STEP_SUMMARY || true
-
-      - name: Upload artifacts (always)
+          echo "===== SEARCH APK =====" >> $GITHUB_STEP_SUMMARY
+          find . -type f -name '*.apk' -print | sed 's/^/FOUND: /' >> $GITHUB_STEP_SUMMARY || true
+      - name: Upload log + any APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
-            **/*.apk
             build.log
-            gradle.properties.out
+            build.n.log
+            **/*.apk
           if-no-files-found: warn
-          retention-days: 14
