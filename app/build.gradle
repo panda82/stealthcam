@@ -4,6 +4,7 @@ apply plugin: 'kotlin-android'
 android {
     namespace "com.marius.stealthcam"
     compileSdkVersion 34
+
     defaultConfig {
         applicationId "com.marius.stealthcam"
         minSdkVersion 26
@@ -11,14 +12,24 @@ android {
         versionCode 2
         versionName "1.1-dcim"
     }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
 }
+
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.activity:activity-ktx:1.8.2'
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
 }
