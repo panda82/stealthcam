@@ -44,4 +44,3 @@ jobs:
         with:
           name: StealthCam-debug
           path: app/build/outputs/apk/debug/*.apk
-```
