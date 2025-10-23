@@ -2,11 +2,9 @@ plugins {
   id 'com.android.application'
   id 'org.jetbrains.kotlin.android'
 }
-
 android {
   namespace "com.marius.stealthcam"
   compileSdkVersion 34
-
   defaultConfig {
     applicationId "com.marius.stealthcam"
     minSdkVersion 26
@@ -14,36 +12,16 @@ android {
     versionCode 1
     versionName "1.0"
   }
-
   buildTypes {
     release {
       minifyEnabled false
       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
     }
   }
-
-  compileOptions {
-    sourceCompatibility JavaVersion.VERSION_17
-    targetCompatibility JavaVersion.VERSION_17
-  }
-  kotlinOptions { jvmTarget = '17' }
+  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+  kotlinOptions  { jvmTarget = '17' }
 }
-
 dependencies {
-  // AppCompat stabil
   implementation 'androidx.appcompat:appcompat:1.6.1'
-
-  // BOM Kotlin (potrivește stdlib cu 1.9.22)
   implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
-
-  // Aliniere COROUTINES (evităm 1.6.1 care apare în log)
-  implementation platform('org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.7.3')
-  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android'
-
-  // Aliniere LIFECYCLE (fără -ktx, versiuni coerente)
-  implementation platform('androidx.lifecycle:lifecycle-bom:2.6.2')
-  implementation 'androidx.lifecycle:lifecycle-runtime'
-  implementation 'androidx.lifecycle:lifecycle-livedata'
-
-  // (NU adăugăm -ktx ca să nu aducă alte versiuni)
 }

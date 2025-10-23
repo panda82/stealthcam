@@ -9,25 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
+        with: { distribution: temurin, java-version: "17" }
       - uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
-
-      - name: Install SDK (API 34 pref, 35 fallback)
+        with: { accept-android-sdk-licenses: true }
+      - name: Install SDK (API 34)
         shell: bash
         run: |
           set -euxo pipefail
-          sdkmanager "platform-tools" || true
-          sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
-          sdkmanager "build-tools;34.0.0"  || sdkmanager "build-tools;35.0.0"  || true
-
-      - name: Install Gradle 8.4 (runner-local)
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-34"
+          sdkmanager "build-tools;34.0.0"
+      - name: Install Gradle 8.4
         shell: bash
         run: |
           set -euxo pipefail
@@ -36,8 +29,7 @@ jobs:
           unzip -q gradle.zip -d "$HOME/gradle"
           echo "$HOME/gradle/gradle-${v}/bin" >> "$GITHUB_PATH"
           gradle --version
-
-      - name: Detect Android application module
+      - name: Detect Android app module
         id: detect
         shell: bash
         run: |
@@ -48,46 +40,24 @@ jobs:
           echo "module_dir=$MOD_REL"    >> "$GITHUB_OUTPUT"
           echo "module_path=:$MOD_NAME" >> "$GITHUB_OUTPUT"
           echo "Module: $MOD_REL | Gradle path ::$MOD_NAME"
-
-      - name: Build (capture full logs)
-        id: buildstep
+      - name: Build Debug APK (strict + logs)
         shell: bash
         run: |
           set -euxo pipefail
-          export GRADLE_OPTS="-Dorg.gradle.console=plain -Dorg.gradle.warning.mode=all"
+          export GRADLE_OPTS="-Dorg.gradle.console=plain"
           ( gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --stacktrace --info --no-daemon || true ) | tee build.log
-          echo "---- projects ----"            >> build.log
-          gradle -q projects                  >> build.log || true
-          echo "---- deps (debugRuntime) ----" >> build.log
-          gradle "${{ steps.detect.outputs.module_path }}:dependencies" --configuration debugRuntimeClasspath >> build.log || true
-          echo "---- tail(build.log, 400) ----" >> $GITHUB_STEP_SUMMARY
-          tail -n 400 build.log >> $GITHUB_STEP_SUMMARY || true
-          echo -e "\n---- WHAT WENT WRONG ----" >> $GITHUB_STEP_SUMMARY
-          awk 'p;/^\* What went wrong:/{p=1} /^\* Try:/{exit}' build.log >> $GITHUB_STEP_SUMMARY || true
-          echo -e "\n---- COMMON FAILURES ----" >> $GITHUB_STEP_SUMMARY
-          grep -nE "FAILED|^FAILURE:|A failure occurred while executing|Exception:|error:" build.log >> $GITHUB_STEP_SUMMARY || true
-
-      - name: List outputs
-        shell: bash
-        run: |
-          set -euxo pipefail
-          echo "=== SEARCH APK/AAB (repo) ==="  | tee -a $GITHUB_STEP_SUMMARY
-          find . -maxdepth 10 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' | tee -a $GITHUB_STEP_SUMMARY || true
-          echo -e "\n=== MODULE BUILD DIR ==="   | tee -a $GITHUB_STEP_SUMMARY
-          if [ -d "${{ steps.detect.outputs.module_dir }}/build" ]; then
-            find "${{ steps.detect.outputs.module_dir }}/build" -maxdepth 8 -type f -print | sed 's/^/BUILDFILE: /' | head -n 200 | tee -a $GITHUB_STEP_SUMMARY
-          else
-            echo "No module build dir." | tee -a $GITHUB_STEP_SUMMARY
+          echo "=== SEARCH APK ==="
+          find "${{ steps.detect.outputs.module_dir }}/build" -type f -name '*.apk' -print | sed 's/^/FOUND: /' || true
+          if ! find "${{ steps.detect.outputs.module_dir }}/build/outputs/apk" -type f -name '*.apk' | grep -q . ; then
+            echo "No APK found under ${{ steps.detect.outputs.module_dir }}/build/outputs/apk"
+            tail -n 200 build.log || true
           fi
-
-      - name: Upload artifacts (always)
+      - name: Upload APK/logs (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
-            **/*.apk
-            **/*.aab
+            ${{ steps.detect.outputs.module_dir }}/build/outputs/apk/**/*.apk
             build.log
           if-no-files-found: warn
-          retention-days: 14
