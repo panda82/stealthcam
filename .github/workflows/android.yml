@@ -101,6 +101,24 @@ jobs:
         with:
           name: StealthCam-debug
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn          echo "================================"
+
+      - name: Upload diagnostics (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-diag
+          path: |
+            build.log
+            deps.txt
+            insight-*.txt
+          if-no-files-found: warn
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StealthCam-debug
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn            **/outputs/apk/**/*.apk
             **/outputs/bundle/**/*.aab
           if-no-files-found: warn
