@@ -1,4 +1,5 @@
 name: Android CI
+
 on:
   push:
     branches: ["main"]
@@ -16,13 +17,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK (cmdline-tools)
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
-          cmdline-tools-version: 11076708
 
-      - name: Install SDK packages (prefer 34, fallback 35)
+      - name: Install SDK packages
         shell: bash
         run: |
           set -euxo pipefail
@@ -30,11 +30,41 @@ jobs:
           sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
           sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
 
-      - name: Install Gradle 8.4 (official zip)
+      - name: Build Debug APK (with diagnostics)
         shell: bash
         run: |
           set -euxo pipefail
-          GRADLE_VER=8.4
+          gradle -q projects || true
+          gradle :app:dependencies --configuration debugRuntimeClasspath > deps.txt || true
+          ( gradle :app:checkDebugAarMetadata --stacktrace --console=plain --info || true ) | tee build.log
+          ( gradle :app:assembleDebug --stacktrace --console=plain --info || true ) | tee -a build.log
+
+      # 🟩 Aici adaugi blocul nostru nou
+      - name: List outputs (debug)
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          find . -maxdepth 6 -type f -name '*.apk' -o -name '*.aab' | sed 's/^/FOUND: /' || true
+
+      - name: Upload any APK/AAB (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            **/outputs/apk/**/*.apk
+            **/outputs/bundle/**/*.aab
+          if-no-files-found: warn
+
+      - name: Upload diagnostics (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-diag
+          path: |
+            build.log
+            deps.txt          GRADLE_VER=8.4
           curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
           unzip -q gradle.zip -d "$HOME/gradle"
           echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
