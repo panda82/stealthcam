@@ -52,15 +52,6 @@ jobs:
           [ -n "$ROOT" ] || { echo "No Gradle settings/build file found"; exit 1; }
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
 
-      - name: Align compile/target SDK if fallback used
-        if: env.USING_API != '34'
-        shell: bash
-        run: |
-          API="${USING_API}"
-          ROOT="${{ steps.detect.outputs.root }}"
-          sed -i "s/compileSdkVersion [0-9][0-9]*/compileSdkVersion ${API}/" "$ROOT/app/build.gradle" || true
-          sed -i "s/targetSdkVersion [0-9][0-9]*/targetSdkVersion ${API}/" "$ROOT/app/build.gradle" || true
-
       - name: Install Gradle 8.4 via SDKMAN
         shell: bash
         run: |
@@ -68,12 +59,15 @@ jobs:
           source "$HOME/.sdkman/bin/sdkman-init.sh"
           sdk install gradle 8.4
           gradle --version
+          echo "$HOME/.sdkman/candidates/gradle/current/bin" >> "$GITHUB_PATH"
 
       - name: Build Debug APK
         shell: bash
         run: |
           set -euxo pipefail
           cd "${{ steps.detect.outputs.root }}"
+          # important: re-sursăm SDKMAN ca 'gradle' să fie în PATH
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
           gradle assembleDebug --stacktrace --warning-mode all --info
 
       - name: Upload APK artifact
