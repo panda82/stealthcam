@@ -26,33 +26,46 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          sdkmanager --list || true
           sdkmanager "platform-tools" || true
-          sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
+          if ! sdkmanager "platforms;android-34"; then
+            LATEST_PLATFORM="$(sdkmanager --list | sed -n 's/^[[:space:]]*\(platforms;android-[0-9]\+\).*/\1/p' | sort -V | tail -1)"
+            sdkmanager "${LATEST_PLATFORM}"
+            USING_API="${LATEST_PLATFORM##*android-}"
+          else
+            USING_API="34"
+          fi
+          if ! sdkmanager "build-tools;34.0.0"; then
+            LATEST_BT="$(sdkmanager --list | sed -n 's/^[[:space:]]*\(build-tools;[0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)"
+            sdkmanager "${LATEST_BT}"
+          fi
+          echo "USING_API=${USING_API}" >> "$GITHUB_ENV"
 
       - name: Detect Gradle project root
         id: detect
         shell: bash
         run: |
+          set -e
           ROOT="$(git ls-files | grep -E '(^|/)(settings\.gradle(\.kts)?|build\.gradle(\.kts)?)$' | xargs -r -n1 dirname | sort -u | head -n1)"
           [ -n "$ROOT" ] || { echo "No Gradle settings/build file found"; exit 1; }
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
 
-      - name: Install Gradle 8.4 via SDKMAN (put on PATH)
+      - name: Install Gradle 8.4 (download official distribution)
         shell: bash
         run: |
-          curl -s "https://get.sdkman.io" | bash
-          source "$HOME/.sdkman/bin/sdkman-init.sh"
-          sdk install gradle 8.4
-          echo "$HOME/.sdkman/candidates/gradle/current/bin" >> "$GITHUB_PATH"
+          set -euxo pipefail
+          GRADLE_VER=8.4
+          GRADLE_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip"
+          curl -L "$GRADLE_URL" -o gradle.zip
+          unzip -q gradle.zip -d "$HOME/gradle"
+          echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
+          gradle --version
 
       - name: Build Debug APK
         shell: bash
         run: |
           set -euxo pipefail
           cd "${{ steps.detect.outputs.root }}"
-          # re-sursăm SDKMAN pentru sesiunea curentă
-          source "$HOME/.sdkman/bin/sdkman-init.sh"
           gradle assembleDebug --stacktrace --warning-mode all --info
 
       - name: Upload APK artifact
