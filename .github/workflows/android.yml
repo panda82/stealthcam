@@ -28,12 +28,16 @@ jobs:
             build-tools;34.0.0
             platform-tools
 
-      # rulează Gradle fără wrapper, acțiunea descarcă Gradle 8.7
+      # Instalează Gradle 8.7 via SDKMAN! (nu mai folosim acțiuni Gradle depreciate)
+      - name: Install Gradle 8.7 via SDKMAN
+        run: |
+          curl -s "https://get.sdkman.io" | bash
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          sdk install gradle 8.7
+          gradle --version
+
       - name: Build Debug APK
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: 8.7
-          arguments: assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
