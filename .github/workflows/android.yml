@@ -23,13 +23,13 @@ jobs:
         with:
           accept-android-sdk-licenses: true
 
-      - name: Install SDK packages (API 34 preferred, 35 fallback)
+      - name: Install SDK packages (prefer 34)
         shell: bash
         run: |
           set -euxo pipefail
           sdkmanager "platform-tools" || true
-          sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
-          sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
+          sdkmanager "platforms;android-34" || true
+          sdkmanager "build-tools;34.0.0" || true
 
       - name: Install Gradle 8.4 (official zip)
         shell: bash
@@ -45,30 +45,48 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          echo "---- projects ----"
           gradle -q projects || true
-          echo "---- :app tasks (first 100 lines) ----"
-          gradle :app:tasks --all | head -n 100 || true
-          echo "---- dependency insight (coroutines & livedata) ----"
-          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency kotlinx-coroutines-core || true
-          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency lifecycle-livedata || true
+          echo "---- :app tasks (first 120 lines) ----"
+          gradle :app:tasks --all | head -n 120 || true
+          echo "---- grep com.android.application ----"
+          grep -RIn --include=build.gradle --include=build.gradle.kts "com.android.application" . || true
 
-      - name: Build Debug APK (capture full logs)
+      - name: Build (capture full logs, do not fail job)
         shell: bash
         run: |
           set -euxo pipefail
+          # rulează întâi verificarea care pica, apoi buildul; nu oprim jobul ca să încărcăm logurile
           ( gradle :app:checkDebugAarMetadata --stacktrace --console=plain --info || true ) | tee build.log
           ( gradle :app:assembleDebug         --stacktrace --console=plain --info || true ) | tee -a build.log
+          echo "---- tail build.log ----"
+          tail -n 120 build.log || true
 
       - name: List outputs (debug)
         if: always()
         shell: bash
         run: |
           set -euxo pipefail
-          echo "=== REPO TREE (top) ==="; ls -la
-          echo "=== SEARCH APK/AAB (deep) ==="
+          echo "=== REPO ROOT ==="; ls -la
+          echo "=== SEARCH APK/AAB ==="
           find . -maxdepth 8 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
-          echo "=== LIST app/build ==="
-          [ -d app/build ] && find app/build -maxdepth 6 -type f -print | sed 's/^/BUILDFILE: /' || echo "No app/build directory."
+          echo "=== LIST app/ ==="
+          find app -maxdepth 6 -type f -print 2>/dev/null | sed 's/^/APPFILE: /' || echo "No app/ directory or files."
+
+      - name: Upload build log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: build.log
+
+      - name: Upload app folder (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-folder
+          path: app/**
+          if-no-files-found: warn
 
       - name: Upload any APK/AAB (always)
         if: always()
@@ -79,19 +97,3 @@ jobs:
             **/outputs/apk/**/*.apk
             **/outputs/bundle/**/*.aab
           if-no-files-found: warn
-
-      - name: Upload build folder (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-build-folder
-          path: app/build/**
-          if-no-files-found: warn
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
