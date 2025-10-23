@@ -22,13 +22,13 @@ jobs:
           accept-android-sdk-licenses: true
           cmdline-tools-version: 11076708
 
-      - name: Install SDK packages (with fallback)
+      - name: Install SDK packages (prefer 34, fallback 35)
         shell: bash
         run: |
           set -euxo pipefail
           sdkmanager "platform-tools" || true
-          sdkmanager "platforms;android-35" || sdkmanager "platforms;android-34" || true
-          sdkmanager "build-tools;35.0.0" || sdkmanager "build-tools;34.0.0" || true
+          sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
+          sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
 
       - name: Install Gradle 8.4 (official zip)
         shell: bash
@@ -44,24 +44,19 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          # proiectul e la rădăcină; dacă nu, adaptează după ce stabilizăm
           gradle -q projects || true
           gradle :app:dependencies --configuration debugRuntimeClasspath > deps.txt || true
-          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency lifecycle-livedata > insight-livedata.txt || true
-          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency kotlinx-coroutines-core > insight-coroutines.txt || true
           gradle :app:checkDebugAarMetadata --stacktrace --warning-mode all --info | tee build.log
-          # dacă trece metadata, încearcă buildul
           gradle :app:assembleDebug --stacktrace --warning-mode all --info | tee -a build.log || true
 
       - name: Upload diagnostic logs (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-diag
+          name: gradle-build-log
           path: |
             build.log
             deps.txt
-            insight-*.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
