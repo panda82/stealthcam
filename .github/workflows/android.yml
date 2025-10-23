@@ -69,20 +69,4 @@ jobs:
         with:
           name: StealthCam-debug
           path: app/build/outputs/apk/debug/*.apk
-
-- name: List outputs (debug)
-  if: always()
-  shell: bash
-  run: |
-    set -euxo pipefail
-    find . -maxdepth 6 -type f -name '*.apk' -o -name '*.aab' | sed 's/^/FOUND: /' || true
-
-- name: Upload any APK/AAB (always)
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: build-artifacts
-    path: |
-      **/outputs/apk/**/*.apk
-      **/outputs/bundle/**/*.aab
-    if-no-files-found: warn
+          
