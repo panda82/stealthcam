@@ -8,17 +8,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
-      - name: Set up Android SDK (cmdline-tools)
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
@@ -27,7 +24,6 @@ jobs:
             platforms;android-34
             build-tools;34.0.0
             platform-tools
-
       - name: Install Gradle 8.4 via SDKMAN
         shell: bash
         run: |
@@ -35,10 +31,8 @@ jobs:
           source "$HOME/.sdkman/bin/sdkman-init.sh"
           sdk install gradle 8.4
           gradle --version
-
       - name: Build Debug APK
         run: gradle assembleDebug
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
