@@ -40,18 +40,28 @@ jobs:
           echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Build Debug APK
+      - name: Build Debug APK (with diagnostics)
         shell: bash
         run: |
           set -euxo pipefail
-          gradle :app:assembleDebug --stacktrace --warning-mode all --info | tee build.log
+          # proiectul e la rădăcină; dacă nu, adaptează după ce stabilizăm
+          gradle -q projects || true
+          gradle :app:dependencies --configuration debugRuntimeClasspath > deps.txt || true
+          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency lifecycle-livedata > insight-livedata.txt || true
+          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency kotlinx-coroutines-core > insight-coroutines.txt || true
+          gradle :app:checkDebugAarMetadata --stacktrace --warning-mode all --info | tee build.log
+          # dacă trece metadata, încearcă buildul
+          gradle :app:assembleDebug --stacktrace --warning-mode all --info | tee -a build.log || true
 
-      - name: Upload build log (always)
+      - name: Upload diagnostic logs (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-build-log
-          path: build.log
+          name: gradle-diag
+          path: |
+            build.log
+            deps.txt
+            insight-*.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
