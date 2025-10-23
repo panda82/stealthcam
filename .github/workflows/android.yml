@@ -42,7 +42,7 @@ jobs:
           if [ -d app ]; then
             echo "module_dir=app" >> "$GITHUB_OUTPUT"
             echo "module_path=:app" >> "$GITHUB_OUTPUT"
-            echo "Module (fallback): app | Gradle path ::app"
+            echo "Module: app | Gradle path ::app"
           else
             HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts 'com.android.application' . | head -n1 || true)"
             [ -n "$HIT" ] || { echo "No module with 'com.android.application' found."; exit 1; }
@@ -52,41 +52,43 @@ jobs:
             echo "Module: $MOD_REL | Gradle path ::$MOD_NAME"
           fi
 
-      - name: Build & Package Debug (print to Summary)
+      - name: Build & Package Debug (STRICT — fail on error)
         shell: bash
         run: |
           set -euxo pipefail
           export GRADLE_OPTS="-Dorg.gradle.console=plain -Dorg.gradle.warning.mode=all"
-          # curățăm ca să vedem clar ce se produce
+          # curățăm și afișăm proprietăți utile
           gradle "${{ steps.detect.outputs.module_path }}:clean" --no-daemon
-          # build + package (ambele, ca să nu rateze creația APK-ului)
-          ( gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --no-daemon --stacktrace --info || true ) | tee build.log
-          ( gradle "${{ steps.detect.outputs.module_path }}:packageDebug"  --no-daemon --stacktrace --info || true ) | tee -a build.log
+          gradle "${{ steps.detect.outputs.module_path }}:properties" --no-daemon | tee gradle.properties.out || true
 
-          echo "===== TASKS containing 'package' =====" >> $GITHUB_STEP_SUMMARY
-          gradle "${{ steps.detect.outputs.module_path }}:tasks" --all | grep -i package | head -n 100 >> $GITHUB_STEP_SUMMARY || true
+          # rulează build-ul, DAR fără "|| true" -> dacă dă eroare, jobul PICA și vedem cauza
+          gradle "${{ steps.detect.outputs.module_path }}:assembleDebug" --no-daemon --stacktrace --info --warning-mode all | tee build.log
 
-          echo "===== TREE app/build (top 400 lines) =====" >> $GITHUB_STEP_SUMMARY
+          # listări după build
+          echo "===== SEARCH *.apk (repo) ====="        >> $GITHUB_STEP_SUMMARY
+          find . -maxdepth 10 -type f -name '*.apk' -print | sed 's/^/FOUND: /' >> $GITHUB_STEP_SUMMARY || true
+
+          echo "===== TREE app/build (top 400) ====="    >> $GITHUB_STEP_SUMMARY
           if [ -d "${{ steps.detect.outputs.module_dir }}/build" ]; then
-            find "${{ steps.detect.outputs.module_dir }}/build" -maxdepth 6 -type f | sort | head -n 400 >> $GITHUB_STEP_SUMMARY
+            find "${{ steps.detect.outputs.module_dir }}/build" -maxdepth 7 -type f | sort | head -n 400 >> $GITHUB_STEP_SUMMARY
           else
             echo "No module build dir." >> $GITHUB_STEP_SUMMARY
           fi
 
-          echo "===== SEARCH *.apk repo-wide =====" >> $GITHUB_STEP_SUMMARY
-          find . -maxdepth 10 -type f -name '*.apk' -print | sed 's/^/FOUND: /' >> $GITHUB_STEP_SUMMARY || true
-
-          echo "===== TAIL(build.log, 300) =====" >> $GITHUB_STEP_SUMMARY
+          echo "===== TAIL(build.log, 300) ====="        >> $GITHUB_STEP_SUMMARY
           tail -n 300 build.log >> $GITHUB_STEP_SUMMARY || true
 
-      - name: Upload APKs + build dir + logs (always)
+          echo "===== WHAT WENT WRONG ====="             >> $GITHUB_STEP_SUMMARY
+          awk 'p;/^\* What went wrong:/{p=1} /^\* Try:/{exit}' build.log >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Upload artifacts (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
             **/*.apk
-            ${{ steps.detect.outputs.module_dir }}/build/**
             build.log
+            gradle.properties.out
           if-no-files-found: warn
           retention-days: 14
