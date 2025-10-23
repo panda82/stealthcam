@@ -1,5 +1,17 @@
-.github/workflows/build_step_patch.txt
-*.bak
-gradle.zip
+# Gradle build
+.gradle/
+**/build/
+
+# Local SDK / IDE
+local.properties
+.idea/
+*.iml
+
+# Distribuții Gradle/zip mari - NU în repo
 gradle/
+gradle.zip
 *.zip
+
+# Output-uri
+*.apk
+*.aab
