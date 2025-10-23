@@ -40,23 +40,29 @@ jobs:
           echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Build Debug APK (with diagnostics)
+      - name: Diagnostics + Build
         shell: bash
         run: |
           set -euxo pipefail
+          # 1) Proiecte + arbore dependențe
           gradle -q projects || true
           gradle :app:dependencies --configuration debugRuntimeClasspath > deps.txt || true
-          gradle :app:checkDebugAarMetadata --stacktrace --warning-mode all --info | tee build.log
-          gradle :app:assembleDebug --stacktrace --warning-mode all --info | tee -a build.log || true
+          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency lifecycle-livedata > insight-livedata.txt || true
+          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency kotlinx-coroutines-core > insight-coroutines.txt || true
+          # 2) Rulăm task-ul care pică cu log maximal; nu oprim pe eroare ca să salvăm logul
+          ( gradle :app:checkDebugAarMetadata --stacktrace --debug --console=plain || true ) | tee build.log
+          # 3) Dacă a trecut metadata, încercăm și assemble, dar nu blocăm artifactele
+          ( gradle :app:assembleDebug --stacktrace --debug --console=plain || true ) | tee -a build.log
 
-      - name: Upload diagnostic logs (always)
+      - name: Upload diagnostics (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-build-log
+          name: gradle-diag
           path: |
             build.log
             deps.txt
+            insight-*.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
