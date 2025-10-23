@@ -1,7 +1,3 @@
-Sunt GitHub Copilot Chat Assistant.
-Iată conținutul complet al fișierului .github/workflows/android.yml (ref: 4939c27ce9aed2c3b05150b2f8b676acf98e9b35):
-
-```yaml
 name: Android CI
 
 on:
@@ -48,4 +44,3 @@ jobs:
         with:
           name: StealthCam-debug
           path: app/build/outputs/apk/debug/*.apk
-```
