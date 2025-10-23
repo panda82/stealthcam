@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # fallback dacă nu e setat - setup-android acționează de obicei asupra acestei variabile
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - uses: actions/checkout@v4
@@ -18,16 +21,36 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK (cmdline-tools + pachete)
+      # Instalează doar cmdline-tools cu acțiunea oficială (fără bloc packages care poate eșua)
+      - name: Set up Android SDK (cmdline-tools)
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
-          # opțional: alege versiunea cmdline-tools
           cmdline-tools-version: 11076708
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
-            platform-tools
+
+      # Pas explicit pentru a instala platform-tools, platform-34 și build-tools 34.0.0
+      # Motiv: instalarea prin blocul packages la setup-android a dat exit code 1 în log.
+      - name: Install required Android SDK packages
+        run: |
+          set -e
+          # Asigură variabila de mediu
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+
+          # posibile locații pentru sdkmanager
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager"
+          fi
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          echo "Using sdkmanager at: $SDKMANAGER"
+          # actualizează repo și instalează pachetele necesare non-interactiv
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+          # acceptă licențele (unele pachete pot cere explicit accept)
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
 
       - name: Install Gradle 8.7 via SDKMAN (fără acțiuni depreciate)
         run: |
@@ -37,7 +60,8 @@ jobs:
           gradle --version
 
       - name: Build Debug APK
-        run: gradle assembleDebug
+        run: ./gradlew assembleDebug
+        # folosește ./gradlew în loc de gradle direct pentru consistență cu wrapper-ul proiectului
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
