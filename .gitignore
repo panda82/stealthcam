@@ -1,2 +1,5 @@
 .github/workflows/build_step_patch.txt
 *.bak
+gradle.zip
+gradle/
+*.zip
