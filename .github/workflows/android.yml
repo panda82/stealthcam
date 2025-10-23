@@ -26,20 +26,9 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          sdkmanager --list || true
           sdkmanager "platform-tools" || true
-          if ! sdkmanager "platforms;android-34"; then
-            LATEST_PLATFORM="$(sdkmanager --list | sed -n 's/^[[:space:]]*\(platforms;android-[0-9]\+\).*/\1/p' | sort -V | tail -1)"
-            sdkmanager "${LATEST_PLATFORM}"
-            USING_API="${LATEST_PLATFORM##*android-}"
-          else
-            USING_API="34"
-          fi
-          if ! sdkmanager "build-tools;34.0.0"; then
-            LATEST_BT="$(sdkmanager --list | sed -n 's/^[[:space:]]*\(build-tools;[0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)"
-            sdkmanager "${LATEST_BT}"
-          fi
-          echo "USING_API=${USING_API}" >> "$GITHUB_ENV"
+          sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
+          sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
 
       - name: Detect Gradle project root
         id: detect
@@ -49,23 +38,58 @@ jobs:
           ROOT="$(git ls-files | grep -E '(^|/)(settings\.gradle(\.kts)?|build\.gradle(\.kts)?)$' | xargs -r -n1 dirname | sort -u | head -n1)"
           [ -n "$ROOT" ] || { echo "No Gradle settings/build file found"; exit 1; }
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          echo "Gradle root: $ROOT"
+          echo "---- tree (root) ----"; ls -la "$ROOT"
 
-      - name: Install Gradle 8.4 (download official distribution)
+      - name: Install Gradle 8.4 (official zip)
         shell: bash
         run: |
           set -euxo pipefail
           GRADLE_VER=8.4
-          GRADLE_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip"
-          curl -L "$GRADLE_URL" -o gradle.zip
+          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
           unzip -q gradle.zip -d "$HOME/gradle"
           echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
           gradle --version
+
+      - name: Detect Android application module
+        id: module
+        shell: bash
+        run: |
+          set -e
+          ROOT="${{ steps.detect.outputs.root }}"
+          # caută fișier care conține pluginul de aplicație
+          HIT="$(grep -RIl --include=build.gradle --include=build.gradle.kts "com.android.application" "$ROOT" || true)"
+          if [ -z "$HIT" ]; then
+            echo "Nu am găsit niciun modul cu 'com.android.application' sub $ROOT"; exit 1
+          fi
+          MOD_DIR="$(dirname "$HIT")"
+          # scoate prefixul root/
+          MOD_REL="${MOD_DIR#$ROOT/}"
+          MOD_NAME="${MOD_REL//\//:}"  # înlocuiește / cu :
+          echo "Found app module at: $MOD_REL  (Gradle path :$MOD_NAME)"
+          echo "moduleDir=$MOD_REL" >> "$GITHUB_OUTPUT"
+          echo "modulePath=:$MOD_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Show Gradle projects & tasks
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd "${{ steps.detect.outputs.root }}"
+          gradle -q projects || true
+          gradle tasks --all | head -n 120 || true
 
       - name: Build Debug APK
         shell: bash
         run: |
           set -euxo pipefail
           cd "${{ steps.detect.outputs.root }}"
+          gradle "${{ steps.module.outputs.modulePath }}:assembleDebug" --stacktrace --warning-mode all --info
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StealthCam-debug
+          path: ${{ steps.detect.outputs.root }}/${{ steps.module.outputs.moduleDir }}/build/outputs/apk/debug/*.apk          cd "${{ steps.detect.outputs.root }}"
           gradle assembleDebug --stacktrace --warning-mode all --info
 
       - name: Upload APK artifact
