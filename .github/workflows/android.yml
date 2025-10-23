@@ -67,7 +67,8 @@ jobs:
           name: gradle-diag
           path: |
             build.log
-            deps.txt          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
+            deps.txt
+          if-no-files-found: warn            deps.txt          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
           unzip -q gradle.zip -d "$HOME/gradle"
           echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
           gradle --version
