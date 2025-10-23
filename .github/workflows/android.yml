@@ -1,3 +1,5 @@
+mkdir -p .github/workflows
+cat > .github/workflows/android.yml <<'YAML'
 name: Android CI
 
 on:
@@ -18,25 +20,19 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # Instalează Android cmdline-tools (fără 'packages' ca să evităm concatenarea)
       - name: Set up Android SDK (cmdline-tools only)
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
           cmdline-tools-version: 11076708
 
-      # Instalează pachetele, cu fallback dacă 34 nu e disponibil pe runner
       - name: Install SDK packages (with fallback)
         shell: bash
         run: |
           set -euxo pipefail
-
-          sdkmanager --list || true
-
-          # platform-tools
           sdkmanager "platform-tools" || true
 
-          # Platform 34 sau cel mai nou disponibil
+          # Prefer API 34; dacă nu e disponibil, ia-l pe cel mai nou
           if ! sdkmanager "platforms;android-34"; then
             LATEST_PLATFORM="$(sdkmanager --list | sed -n 's/^[[:space:]]*\(platforms;android-[0-9]\+\).*/\1/p' | sort -V | tail -1)"
             sdkmanager "${LATEST_PLATFORM}"
@@ -44,28 +40,62 @@ jobs:
           else
             USING_API="34"
           fi
-          echo "USING_API=${USING_API}" >> "$GITHUB_ENV"
 
-          # Build-tools 34.0.0 sau cele mai noi disponibile
+          # Prefer build-tools 34.0.0; dacă nu există, ia cea mai nouă
           if ! sdkmanager "build-tools;34.0.0"; then
             LATEST_BT="$(sdkmanager --list | sed -n 's/^[[:space:]]*\(build-tools;[0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)"
             sdkmanager "${LATEST_BT}"
           fi
 
-      # Dacă API-ul nu e 34, aliniază compile/target în gradle ca să potrivească
+          echo "USING_API=${USING_API}" >> "$GITHUB_ENV"
+
+      - name: Detect Gradle project root
+        id: detect
+        shell: bash
+        run: |
+          set -e
+          ROOT="$(git ls-files | grep -E '(^|/)(settings\.gradle(\.kts)?|build\.gradle(\.kts)?)$' | xargs -r -n1 dirname | sort -u | head -n1)"
+          if [ -z "$ROOT" ]; then
+            echo "Nu am găsit settings.gradle/build.gradle în repo." >&2
+            exit 1
+          fi
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          echo "Gradle root: $ROOT"
+
       - name: Align compile/target SDK if fallback used
         if: env.USING_API != '34'
         shell: bash
         run: |
-          echo "Adjusting compile/target SDK to ${USING_API}"
-          sed -i "s/compileSdkVersion [0-9][0-9]*/compileSdkVersion ${USING_API}/" app/build.gradle
-          sed -i "s/targetSdkVersion [0-9][0-9]*/targetSdkVersion ${USING_API}/" app/build.gradle
+          API="${USING_API}"
+          ROOT="${{ steps.detect.outputs.root }}"
+          echo "Adjusting compile/target SDK in $ROOT to ${API}"
+          sed -i "s/compileSdkVersion [0-9][0-9]*/compileSdkVersion ${API}/" "$ROOT/app/build.gradle" || true
+          sed -i "s/targetSdkVersion [0-9][0-9]*/targetSdkVersion ${API}/" "$ROOT/app/build.gradle" || true
 
-      # Instalează Gradle 8.4 (compatibil cu AGP 8.2.2 din proiectul tău)
-      - name: Install Gradle 8.4 via SDKMAN
+      - name: Install Gradle 8.4 via SDKMAN (compatible with AGP 8.2.2)
         shell: bash
         run: |
           curl -s "https://get.sdkman.io" | bash
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          sdk install gradle 8.4
+          gradle --version
+
+      - name: Build Debug APK
+        shell: bash
+        run: |
+          cd "${{ steps.detect.outputs.root }}"
+          gradle assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StealthCam-debug
+          path: ${{ steps.detect.outputs.root }}/app/build/outputs/apk/debug/*.apk
+YAML
+
+git add .github/workflows/android.yml
+git commit -m "CI: auto-detect Gradle root + robust SDK install"
+git push          curl -s "https://get.sdkman.io" | bash
           source "$HOME/.sdkman/bin/sdkman-init.sh"
           sdk install gradle 8.4
           gradle --version
