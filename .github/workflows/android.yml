@@ -1,6 +1,3 @@
-GitHub Copilot Chat Assistant — conținutul .github/workflows/android.yml (ref 56ae31af925f97908a104078215b11e7e217c096):
-
-```yml
 name: Android CI
 
 on:
