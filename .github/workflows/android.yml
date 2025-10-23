@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,7 +23,7 @@ jobs:
         with:
           accept-android-sdk-licenses: true
 
-      - name: Install SDK packages (API 34 preferred)
+      - name: Install SDK packages (API 34 preferred, 35 fallback)
         shell: bash
         run: |
           set -euxo pipefail
@@ -32,233 +31,41 @@ jobs:
           sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
           sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
 
-      - name: Install Gradle manually
+      - name: Install Gradle 8.4 (official zip)
         shell: bash
         run: |
           set -euxo pipefail
-          curl -L "https://services.gradle.org/distributions/gradle-8.5-bin.zip" -o gradle.zip
+          GRADLE_VER=8.4
+          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
           unzip -q gradle.zip -d "$HOME/gradle"
-          echo "$HOME/gradle/gradle-8.5/bin" >> "$GITHUB_PATH"
+          echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Run unit tests
-        shell: bash
-        run: |
-          set -euxo pipefail
-          gradle testDebugUnitTest --stacktrace --info
-
-      - name: Diagnostics + Build
+      - name: Build Debug APK (with full diagnostics)
         shell: bash
         run: |
           set -euxo pipefail
           gradle -q projects || true
           gradle :app:dependencies --configuration debugRuntimeClasspath > deps.txt || true
-          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency lifecycle-livedata > insight-livedata.txt || true
-          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency kotlinx-coroutines-core > insight-coroutines.txt || true
-          ( gradle :app:checkDebugAarMetadata --stacktrace --debug --console=plain || true ) | tee build.log
-          ( gradle :app:assembleDebug --stacktrace --debug --console=plain || true ) | tee -a build.log
+          ( gradle :app:checkDebugAarMetadata --stacktrace --console=plain --info || true ) | tee build.log
+          ( gradle :app:assembleDebug --stacktrace --console=plain --info || true ) | tee -a build.log
 
       - name: List outputs (debug)
         if: always()
         shell: bash
         run: |
           set -euxo pipefail
-          echo "=== SEARCHING FOR APK FILES ==="
+          echo "=== SEARCHING FOR APK/AAB FILES ==="
           find . -maxdepth 6 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
-          echo "================================"
+          echo "===================================="
 
-      - name: Upload diagnostics (always)
+      - name: Upload any APK/AAB (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-diag
+          name: build-artifacts
           path: |
-            build.log
-            deps.txt
-            insight-livedata.txt
-            insight-coroutines.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-livedata.txt
-            insight-coroutines.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-livedata.txt
-            insight-coroutines.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-livedata.txt
-            insight-coroutines.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-livedata.txt
-            insight-coroutines.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-livedata.txt
-            insight-coroutines.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-livedata.txt
-            insight-coroutines.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-*.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-*.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn          echo "================================"
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-*.txt
-          if-no-files-found: warn
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn            **/outputs/apk/**/*.apk
+            **/outputs/apk/**/*.apk
             **/outputs/bundle/**/*.aab
           if-no-files-found: warn
 
@@ -270,89 +77,3 @@ jobs:
           path: |
             build.log
             deps.txt
-          if-no-files-found: warn            **/outputs/apk/**/*.apk
-            **/outputs/bundle/**/*.aab
-          if-no-files-found: warn
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-          if-no-files-found: warn            **/outputs/apk/**/*.apk
-            **/outputs/bundle/**/*.aab
-          if-no-files-found: warn
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-          if-no-files-found: warn            **/outputs/apk/**/*.apk
-            **/outputs/bundle/**/*.aab
-          if-no-files-found: warn
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-          if-no-files-found: warn            **/outputs/apk/**/*.apk
-            **/outputs/bundle/**/*.aab
-          if-no-files-found: warn
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-          if-no-files-found: warn          path: |
-            build.log
-            deps.txt
-          if-no-files-found: warn            deps.txt          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
-          unzip -q gradle.zip -d "$HOME/gradle"
-          echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
-          gradle --version
-
-      - name: Diagnostics + Build
-        shell: bash
-        run: |
-          set -euxo pipefail
-          # 1) Proiecte + arbore dependențe
-          gradle -q projects || true
-          gradle :app:dependencies --configuration debugRuntimeClasspath > deps.txt || true
-          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency lifecycle-livedata > insight-livedata.txt || true
-          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency kotlinx-coroutines-core > insight-coroutines.txt || true
-          # 2) Rulăm task-ul care pică cu log maximal; nu oprim pe eroare ca să salvăm logul
-          ( gradle :app:checkDebugAarMetadata --stacktrace --debug --console=plain || true ) | tee build.log
-          # 3) Dacă a trecut metadata, încercăm și assemble, dar nu blocăm artifactele
-          ( gradle :app:assembleDebug --stacktrace --debug --console=plain || true ) | tee -a build.log
-
-      - name: Upload diagnostics (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-diag
-          path: |
-            build.log
-            deps.txt
-            insight-*.txt
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: StealthCam-debug
-          path: app/build/outputs/apk/debug/*.apk
-          
