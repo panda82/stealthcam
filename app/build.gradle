@@ -29,27 +29,27 @@ android {
     kotlinOptions { jvmTarget = '17' }
 }
 
-/* Evită mismatch: blochează versiunile sensibile */
+/* Aliniere forțată la ecosistemul 1.8.x / 1.6.4 */
 configurations.all {
     resolutionStrategy {
-        force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
-        force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.9.22'
-        force 'org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.7.3'
-        force 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.22'
+        force 'org.jetbrains:annotations:23.0.0'
+        force 'org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.6.4'
+        force 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
     }
 }
 
 dependencies {
-    // Set AndroidX coerent cu compileSdk 34 și Kotlin 1.9.x
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'androidx.core:core-ktx:1.13.1'
-    implementation 'androidx.activity:activity-ktx:1.9.2'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.6'
+    // AndroidX într-o combinație stabilă, compatibilă cu coroutines 1.6.4
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core:1.9.0'
+    implementation 'androidx.activity:activity:1.7.2'
+    implementation 'androidx.lifecycle:lifecycle-runtime:2.6.1'
 
-    // Kotlin BOM aliniat
-    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.9.22')
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+    // Kotlin stdlib 1.8.22 (aliniat cu pluginul)
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
 
-    // Asigură prezența coroutines pe versiunea forțată
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    // Coroutines 1.6.4 (cerută tranzitiv oricum; o fixăm explicit)
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
 }
