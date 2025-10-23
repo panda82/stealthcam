@@ -8,8 +8,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -22,7 +24,7 @@ jobs:
         with:
           accept-android-sdk-licenses: true
 
-      - name: Install SDK packages
+      - name: Install SDK packages (API 34 preferred)
         shell: bash
         run: |
           set -euxo pipefail
@@ -30,7 +32,7 @@ jobs:
           sdkmanager "platforms;android-34" || sdkmanager "platforms;android-35" || true
           sdkmanager "build-tools;34.0.0" || sdkmanager "build-tools;35.0.0" || true
 
-      - name: Build Debug APK (with diagnostics)
+      - name: Build Debug APK (with full diagnostics)
         shell: bash
         run: |
           set -euxo pipefail
@@ -39,13 +41,14 @@ jobs:
           ( gradle :app:checkDebugAarMetadata --stacktrace --console=plain --info || true ) | tee build.log
           ( gradle :app:assembleDebug --stacktrace --console=plain --info || true ) | tee -a build.log
 
-      # 🟩 Aici adaugi blocul nostru nou
       - name: List outputs (debug)
         if: always()
         shell: bash
         run: |
           set -euxo pipefail
-          find . -maxdepth 6 -type f -name '*.apk' -o -name '*.aab' | sed 's/^/FOUND: /' || true
+          echo "=== SEARCHING FOR APK FILES ==="
+          find . -maxdepth 6 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
+          echo "================================"
 
       - name: Upload any APK/AAB (always)
         if: always()
@@ -64,8 +67,7 @@ jobs:
           name: gradle-diag
           path: |
             build.log
-            deps.txt          GRADLE_VER=8.4
-          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
+            deps.txt          curl -L "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o gradle.zip
           unzip -q gradle.zip -d "$HOME/gradle"
           echo "$HOME/gradle/gradle-${GRADLE_VER}/bin" >> "$GITHUB_PATH"
           gradle --version
