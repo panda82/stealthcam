@@ -101,6 +101,18 @@ jobs:
           path: |
             build.log
             deps.txt
+          if-no-files-found: warn            **/outputs/apk/**/*.apk
+            **/outputs/bundle/**/*.aab
+          if-no-files-found: warn
+
+      - name: Upload diagnostics (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-diag
+          path: |
+            build.log
+            deps.txt
           if-no-files-found: warn          path: |
             build.log
             deps.txt
