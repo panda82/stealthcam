@@ -41,14 +41,22 @@ jobs:
           echo "$HOME/gradle/gradle-8.5/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Build Debug APK (with full diagnostics)
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gradle testDebugUnitTest --stacktrace --info
+
+      - name: Diagnostics + Build
         shell: bash
         run: |
           set -euxo pipefail
           gradle -q projects || true
           gradle :app:dependencies --configuration debugRuntimeClasspath > deps.txt || true
-          ( gradle :app:checkDebugAarMetadata --stacktrace --console=plain --info || true ) | tee build.log
-          ( gradle :app:assembleDebug --stacktrace --console=plain --info || true ) | tee -a build.log
+          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency lifecycle-livedata > insight-livedata.txt || true
+          gradle :app:dependencyInsight --configuration debugRuntimeClasspath --dependency kotlinx-coroutines-core > insight-coroutines.txt || true
+          ( gradle :app:checkDebugAarMetadata --stacktrace --debug --console=plain || true ) | tee build.log
+          ( gradle :app:assembleDebug --stacktrace --debug --console=plain || true ) | tee -a build.log
 
       - name: List outputs (debug)
         if: always()
@@ -59,13 +67,23 @@ jobs:
           find . -maxdepth 6 -type f \( -name '*.apk' -o -name '*.aab' \) -print | sed 's/^/FOUND: /' || true
           echo "================================"
 
-      - name: Upload any APK/AAB (always)
+      - name: Upload diagnostics (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
+          name: gradle-diag
           path: |
-            **/outputs/apk/**/*.apk
+            build.log
+            deps.txt
+            insight-*.txt
+          if-no-files-found: warn
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StealthCam-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn            **/outputs/apk/**/*.apk
             **/outputs/bundle/**/*.aab
           if-no-files-found: warn
 
